@@ -1,5 +1,10 @@
 ﻿#include "Simple_Compiler.h"
 #define STATE_NUM WHITESPACE + 1
+#include <vector>
+
+vector<string> resultLex;
+vector<int> linenum;
+extern void syntax();
 
 //각 Token들 정의
 enum State
@@ -57,7 +62,7 @@ int line;
 //Compiler::~Compiler()
 //{
 //}
-int main(int argc, char *argv[])
+int main(int argc, char*argv[])
 {
 	struct  Token token;
 	string test;
@@ -70,6 +75,7 @@ int main(int argc, char *argv[])
 	
 	//입출력할 파일 열어놓기
 	finput.open(argv[1], ifstream::binary);
+	//finput.open("input.txt");
 	foutput.open("output.txt");
 
 	//파일 한줄 씩 입력받기
@@ -80,20 +86,28 @@ int main(int argc, char *argv[])
 		for (int i = 0; i < test.length(); i++)
 		{
 			input = test[i];
-
 			temp = temp + input;
 			checkAllType(input);
 			acceptType = checkOne();
-
+			
 			if (accept[WHITESPACE] == 1)							//공백일 경우
 			{
-				if (checkZero() || checkOneNum())					//공백 전에 Token에 Accept할 확신을 가지지 않아 출력 안 햇을 때 출력하도록 명령
+				if (token.location == i-1)					//공백 전에 Token에 Accept할 확신을 가지지 않아 출력 안 햇을 때 출력하도록 명령
 				{
 					temp = "";
 					makeToken(token);
+					token.type = -1;
+					token.location = i+1;
+					token.output = "";
+					resetState();
+					resetAccept();
+					continue;
 				}
+				temp = "";
+				makeToken(token);
+				i = token.location;
 				token.type = -1;
-				token.location = i + 1;
+				token.location = token.location+1;
 				token.output = "";
 				resetState();
 				resetAccept();
@@ -106,7 +120,9 @@ int main(int argc, char *argv[])
 				token.location = i;
 				token.output = temp;
 			}
-			if (!checkZero() && acceptType == -1 && token.type == -1) //에러가 있는 경우
+
+
+			if (i == test.length() - 1 && token.type == -1)  //에러가 있는 경우
 			{
 				foutput << "< Error at " + temp + " >";
 				temp = "";
@@ -116,29 +132,20 @@ int main(int argc, char *argv[])
 				resetAccept();
 				continue;
 			}
+			if (!checkZero() && acceptType == -1 && token.type == -1)
+			{
+				foutput << "< Error at " + temp + " >";
+				temp = "";
+				token.type = -1;
+				token.output = "";
+				resetState();
+				resetAccept();
+				continue;
+			}
+
 			if (i != test.length()-1 && (checkZero() || checkOneNum()))								//확실히 Accept할 Token이 있는 지 확인
 			{
-				if (i == test.length()-1 && acceptType == -1)
-				{
-					if (token.type == -1 || flag == token.location) //에러일 경우 판단
-					{
-						if (temp != "") foutput << "< Error at " + temp + " >"; break;
-					}
-					
-					makeToken(token);
-					flag = token.location;
-					i = token.location;
-					temp = "";
-					token.type = -1;
-					token.output = "";
-					resetState();
-					resetAccept();
-					continue;
-				}
-				else
-				{
-					continue;
-				}
+				continue;
 			}
 			else
 			{
@@ -172,6 +179,10 @@ int main(int argc, char *argv[])
 	finput.close();
 	foutput.close();
 	system("pause");
+
+	resultLex.push_back("$");
+	linenum.push_back(0);
+	syntax();
 	/*if (isRParen(*test.front()))
 		cout << "Success";
 	else
@@ -273,85 +284,158 @@ void resetAccept()
 
 void resetWhiteSpace()
 {
-	for (int i = 0; i < STATE_NUM; i++)
-	{
-		accept[WHITESPACE] = 0;
-	}
+	accept[WHITESPACE] = 0;
 }
 
 //Token 출력
 void makeToken(struct Token output)
 {
-	if (output.type == VTYPE)
+	if (output.type == VTYPE) //vtype
+	{
+		resultLex.push_back("vtype");
+		linenum.push_back(line);
 		foutput << "< VTYPE, " + output.output + " >";
-
+	}
 	else if (output.type == KEYWORD)
+	{
+		string t(output.output);
+		resultLex.push_back(t);
+		linenum.push_back(line);
 		foutput << "< KEYWORD, " + output.output + " >";
-
+	}
 	else if (output.type == BOOLSTRING)
 		foutput << "< BOOLSTRING, " + output.output + " >";
 
 	else if (output.type == INTEGER)
+	{
+		resultLex.push_back("num");
+		linenum.push_back(line);
 		foutput << "< INTEGER, " + output.output + " >";
+	}
 	else if (output.type == INTEGERMINUS)
 	{
+		resultLex.push_back("num");
+		linenum.push_back(line);
+		
+		resultLex.push_back("addsub");
+		linenum.push_back(line);
+
 		output.output = output.output.substr(0, output.output.length() - 1);
 		foutput << "< INTEGER " + output.output + " >";
 		foutput << "< ARITHMETICOP, - >";
 	}
 
 	else if (output.type == LITERALSTRING)
+	{
+		resultLex.push_back("literal");
+		linenum.push_back(line);
 		foutput << "< LITERALSTRING , " + output.output + " >";
-
+	}
 	else if (output.type == FLOATNUM)
+	{
+		resultLex.push_back("float");
+		linenum.push_back(line);
 		foutput << "< FLOATNUM, " + output.output + " >";
+	}
 
 	else if (output.type == FLOATNUMMINUS)
 	{
+		resultLex.push_back("float");
+		linenum.push_back(line);
+
+		resultLex.push_back("addsub");
+		linenum.push_back(line);
+
 		output.output = output.output.substr(0, output.output.length() - 1);
-		foutput << "< FLOATNUM, " + output.output +" >";
+		foutput << "< FLOATNUM, " + output.output + " >";
 		foutput << "< ARITHMETICOP, - >";
 	}
 
 	else if (output.type == ID)
+	{
+		resultLex.push_back("id");
+		linenum.push_back(line);
 		foutput << "< ID, " + output.output + " >";
-
+	}
 	else if (output.type == IDMINUS)
 	{
+		resultLex.push_back("id");
+		linenum.push_back(line);
+
+		resultLex.push_back("addsub");
+		linenum.push_back(line);
+		
 		output.output = output.output.substr(0, output.output.length() - 1);
 		foutput << "< ID, " + output.output + " >";
 		foutput << "< ARITHMETICOP, - >";
 	}
 
 	else if (output.type == ARITHMETICOP)
-		foutput << "< ARITHMETICOP, " + output.output +" >";
+	{
+		if (output.output == "+" || output.output == "-")
+		{
+			resultLex.push_back("addsub");
+			linenum.push_back(line);
+		}
+		else
+		{
+			resultLex.push_back("multdiv");
+			linenum.push_back(line);
+		}
+		foutput << "< ARITHMETICOP, " + output.output + " >";
+	}
 
 	else if (output.type == BITOP)
 		foutput << "< BITOP,  " + output.output + " >";
 
 	else if (output.type == ASSIGNMENT)
+	{
+		resultLex.push_back("assign");
+		linenum.push_back(line);
 		foutput << "< ASSIGNMENT, " + output.output + " >";
-
+	}
 	else if (output.type == COMPOP)
+	{
+		resultLex.push_back("comp");
+		linenum.push_back(line);
 		foutput << "< COMPOP, " + output.output + " >";
-
+	}
 	else if (output.type == TERMINATE)
+	{
+		resultLex.push_back("semi");
+		linenum.push_back(line);
 		foutput << "< TERMINATE, " + output.output + " >";
-
+	}
 	else if (output.type == LBRACE)
+	{
+		resultLex.push_back("lbrace");
+		linenum.push_back(line);
 		foutput << "< LBRACE, " + output.output + " >";
-
+	}
 	else if (output.type == RBRACE)
+	{
+		resultLex.push_back("rbrace");
+		linenum.push_back(line);
 		foutput << "< RBRACE, " + output.output + " >";
-
+	}
 	else if (output.type == LPAREN)
+	{
+		resultLex.push_back("lparen");
+		linenum.push_back(line);
 		foutput << "< LPAREN, " + output.output + " >";
-
+	}
 	else if (output.type == RPAREN)
+	{
+		resultLex.push_back("rparen");
+		linenum.push_back(line);
 		foutput << "< RPAREN, " + output.output + " >";
-
+	}
 	else if (output.type == COMMA)
+	{
+		resultLex.push_back("comma");
+		linenum.push_back(line);
 		foutput << "< COMMA " + output.output + " >";
+	}
 
 }
 
@@ -1592,7 +1676,7 @@ void isWhiteSpace(char input)
 		else if (input == '\t')
 			state[WHITESPACE] = 1;
 
-		else if (input == '\n')
+		else if (input == 13)
 			state[WHITESPACE] = 1;
 
 		else
